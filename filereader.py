@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import fairness as fair
 
 race_map = {
     'White': 'White',
@@ -22,6 +23,7 @@ ethnicity_map = {
     'Unknown': 'Not Hispanic or Latino',
     np.nan: 'Not Hispanic or Latino'
 }
+
 
 location = pd.read_parquet('C:/Users/ejohn/Downloads/CLIF_MIMIC/data/clif_adt.parquet')
 encounter = pd.read_parquet('C:/Users/ejohn/Downloads/CLIF_MIMIC/data/clif_hospitalization.parquet')
@@ -210,6 +212,6 @@ icu_data_agg = icu_data_agg.groupby('hospitalization_id').agg(agg_dict).reset_in
 icu_data_agg.columns = ['_'.join(col).strip() if col[1] else col[0] for col in icu_data_agg.columns.values]
 icu_data=pd.merge(icu_data,icu_data_agg, on=['hospitalization_id'], how='left')
 
-
 demographics = icu_data[['hospitalization_id', 'isfemale', 'ethnicity_category', 'race_category']]
-print(demographics.T.head)
+dem_csv = demographics.to_csv('C:/Users/ejohn/Downloads/CLIF_MIMIC/data/demographics.csv', index=False)
+
