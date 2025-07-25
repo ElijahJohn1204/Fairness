@@ -2,8 +2,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, f1_score, roc_curve
+from sklearn.metrics import accuracy_score, f1_score, roc_curve, roc_auc_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.calibration import calibration_curve
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
@@ -105,7 +106,7 @@ def equalized_odds(icu_data, demographic_group, predicted_outcome, actual_outcom
         'fig_tpr_fpr': fig_tpr_fpr
     }
 
-def disparate_impact_ratio(icu_data, demographic_group, predicted_outcome, actual_outcome, fairness_threshold = 1.2):
+def disparate_impact_ratio(icu_data, demographic_group, predicted_outcome, actual_outcome, fairness_threshold):
     # Calculate probability of positive outcome for each demographic group
     probabilities = icu_data.groupby(demographic_group)[predicted_outcome].mean()
 
@@ -129,7 +130,7 @@ def disparate_impact_ratio(icu_data, demographic_group, predicted_outcome, actua
         'fig': fig
     }
 
-
+'''
 def fairness_adjustment(model, X, y, fairness_metric, demographic, predicted_outcome, actual_outcome, fairness_threshold):
     # Evaluate model's fairness
     fairness_score = evaluate_fairness(df, demographic)
@@ -157,15 +158,16 @@ def adjust_model(model, X, y, fairness_metric, demographic, predicted_outcome, a
         model.fit(X_scaled, y)
 
     return model
+'''
 
-def evaluate_fairness(df, demographic, predicted_outcome, actual_outcome, fairness_threshold,  fairness_metric='all',):
+def evaluate_fairness(df, demographic, predicted_outcome, actual_outcome, fairness_threshold, fairness_metric='all', ratio_threshold = 1.2):
     # Calculate fairness metrics
     if fairness_metric == 'all':
         return {
             'accuracy': accuracy(df, demographic, predicted_outcome, actual_outcome, fairness_threshold),
             'f1_score': f1(df, demographic, predicted_outcome, actual_outcome, fairness_threshold),
             'equalized_odds': equalized_odds(df, demographic, predicted_outcome, actual_outcome, fairness_threshold),
-            'disparate_impact_ratio': disparate_impact_ratio(df, demographic, predicted_outcome, actual_outcome)
+            'disparate_impact_ratio': disparate_impact_ratio(df, demographic, predicted_outcome, actual_outcome, ratio_threshold)
         }
     elif fairness_metric == 'accuracy':
         return accuracy(df, demographic, predicted_outcome, actual_outcome, fairness_threshold)
@@ -174,6 +176,90 @@ def evaluate_fairness(df, demographic, predicted_outcome, actual_outcome, fairne
     elif fairness_metric == 'equalized_odds':    
         return equalized_odds(df, demographic, predicted_outcome, actual_outcome, fairness_threshold)
     elif fairness_metric == 'disparate_impact_ratio':
-        return disparate_impact_ratio(df, demographic, predicted_outcome, actual_outcome)
+        return disparate_impact_ratio(df, demographic, predicted_outcome, actual_outcome, ratio_threshold)
 
 
+def roc_analysis(df, demographic, predicted_outcome, actual_outcome):
+    demographics = df[demographic].unique()
+    roc_curves = {}
+    
+    for demographic_group in demographics:
+        df_group = df[df[demographic] == demographic_group]
+        y_pred_proba = df_group[predicted_outcome]
+        y_true = df_group[actual_outcome]
+        
+        fpr, tpr, thresholds = roc_curve(y_true, y_pred_proba)
+        roc_curves[demographic_group] = (fpr, tpr, thresholds)
+    
+    plot_roc_curves(roc_curves)
+
+    return roc_curves
+
+def plot_roc_curves(roc_curves):
+    for demographic_group, (fpr, tpr, thresholds) in roc_curves.items():
+        plt.plot(fpr, tpr, label=demographic_group)
+    
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Curves')
+    plt.legend()
+    plt.show()
+
+def calibration_analysis(df, demographic, predicted_outcome, actual_outcome):
+    demographics = df[demographic].unique()
+    calibration_plots = {}
+    
+    for demographic_group in demographics:
+        df_group = df[df[demographic] == demographic_group]
+        y_pred_proba = df_group[predicted_outcome]
+        y_true = df_group[actual_outcome]
+        
+        fraction_of_positives, mean_predicted_value = calibration_curve(y_true, y_pred_proba, n_bins=10)
+        calibration_plots[demographic_group] = (fraction_of_positives, mean_predicted_value)
+    
+    plot_calibration_plots(calibration_plots)
+    return calibration_plots
+
+def plot_calibration_plots(calibration_plots):
+    for demographic_group, (fraction_of_positives, mean_predicted_value) in calibration_plots.items():
+        plt.plot(mean_predicted_value, fraction_of_positives, label=demographic_group)
+    
+    plt.plot([0, 1], [0, 1], 'k:', label='Perfectly calibrated')
+    plt.xlabel('Mean predicted value')
+    plt.ylabel('Fraction of positives')
+    plt.title('Calibration plots')
+    plt.legend()
+    plt.show()
+
+def decision_analysis(df, demographic, predicted_outcome, actual_outcome):
+    demographics = df[demographic].unique()
+    decision_curves = {}
+    
+    for demographic_group in demographics:
+        df_group = df[df[demographic] == demographic_group]
+        y_pred_proba = df_group[predicted_outcome]
+        y_true = df_group[actual_outcome]
+        
+        thresholds = np.linspace(0, 1, 100)
+        net_benefits = []
+        for threshold in thresholds:
+            y_pred = (y_pred_proba >= threshold).astype(int)
+            true_positives = np.sum(y_true * y_pred)
+            false_positives = np.sum((1 - y_true) * y_pred)
+            net_benefit = true_positives - false_positives
+            net_benefits.append(net_benefit)
+        
+        decision_curves[demographic_group] = (thresholds, net_benefits)
+    
+    plot_decision_curves(decision_curves)
+    return decision_curves
+
+def plot_decision_curves(decision_curves):
+    for demographic_group, (thresholds, net_benefits) in decision_curves.items():
+        plt.plot(thresholds, net_benefits, label=demographic_group)
+    
+    plt.xlabel('Threshold')
+    plt.ylabel('Net Benefit')
+    plt.title('Decision Analysis Curves')
+    plt.legend()
+    plt.show()
