@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, f1_score, roc_curve, roc_auc_score
 from sklearn.preprocessing import StandardScaler
@@ -231,7 +232,7 @@ def plot_calibration_plots(calibration_plots):
     plt.legend()
     plt.show()
 
-from sklearn.metrics import decision_curve
+
 
 def decision_analysis(df, demographic, predicted_outcome, actual_outcome):
     demographics = df[demographic].unique()
@@ -242,22 +243,16 @@ def decision_analysis(df, demographic, predicted_outcome, actual_outcome):
         y_pred_proba = df_group[predicted_outcome]
         y_true = df_group[actual_outcome]
         
-        prevalence = y_true.mean()
-        thresholds = np.linspace(0, 1, 100)
+        thresholds = np.linspace(0.01, 0.50, 50)
         net_benefits = []
         
         for threshold in thresholds:
             y_pred = (y_pred_proba >= threshold).astype(int)
             tp = np.sum(y_true * y_pred)
-            tn = np.sum((1 - y_true) * (1 - y_pred))
             fp = np.sum((1 - y_true) * y_pred)
-            fn = np.sum(y_true * (1 - y_pred))
+            n = len(y_true)
             
-            sensitivity = tp / (tp + fn)
-            specificity = tn / (tn + fp)
-            weight = threshold / (1 - threshold)
-            
-            net_benefit = sensitivity * prevalence - (1 - specificity) * (1 - prevalence) * weight
+            net_benefit = (tp - fp * (threshold / (1 - threshold))) / n
             net_benefits.append(net_benefit)
         
         decision_curves[demographic_group] = (thresholds, net_benefits)
@@ -271,8 +266,12 @@ def plot_decision_curves(decision_curves):
     for demographic_group, (thresholds, net_benefits) in decision_curves.items():
         plt.plot(thresholds, net_benefits, label=demographic_group)
     
+
     plt.xlabel('Threshold')
     plt.ylabel('Net Benefit')
+    plt.gca().xaxis.set_major_locator(ticker.MultipleLocator(0.1))  # Set x-axis tick locations to 0.1, 0.2, ..., 0.5
+    plt.gca().xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{x*100:.0f}%"))  # Format x-axis tick labels as percentages
+    plt.ylim(0, None)  # Set y-axis limits to start at 0
     plt.title('Decision Analysis Curves')
     plt.legend()
     plt.show()
