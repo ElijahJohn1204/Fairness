@@ -231,6 +231,8 @@ def plot_calibration_plots(calibration_plots):
     plt.legend()
     plt.show()
 
+from sklearn.metrics import decision_curve
+
 def decision_analysis(df, demographic, predicted_outcome, actual_outcome):
     demographics = df[demographic].unique()
     decision_curves = {}
@@ -240,19 +242,30 @@ def decision_analysis(df, demographic, predicted_outcome, actual_outcome):
         y_pred_proba = df_group[predicted_outcome]
         y_true = df_group[actual_outcome]
         
+        prevalence = y_true.mean()
         thresholds = np.linspace(0, 1, 100)
         net_benefits = []
+        
         for threshold in thresholds:
             y_pred = (y_pred_proba >= threshold).astype(int)
-            true_positives = np.sum(y_true * y_pred)
-            false_positives = np.sum((1 - y_true) * y_pred)
-            net_benefit = true_positives - false_positives
+            tp = np.sum(y_true * y_pred)
+            tn = np.sum((1 - y_true) * (1 - y_pred))
+            fp = np.sum((1 - y_true) * y_pred)
+            fn = np.sum(y_true * (1 - y_pred))
+            
+            sensitivity = tp / (tp + fn)
+            specificity = tn / (tn + fp)
+            weight = threshold / (1 - threshold)
+            
+            net_benefit = sensitivity * prevalence - (1 - specificity) * (1 - prevalence) * weight
             net_benefits.append(net_benefit)
         
         decision_curves[demographic_group] = (thresholds, net_benefits)
-    
+
     plot_decision_curves(decision_curves)
+    
     return decision_curves
+
 
 def plot_decision_curves(decision_curves):
     for demographic_group, (thresholds, net_benefits) in decision_curves.items():
